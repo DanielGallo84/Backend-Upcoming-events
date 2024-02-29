@@ -1,9 +1,6 @@
 package org.team4.upcomingevents.config;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,15 +9,13 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.team4.upcomingevents.security.JpaUserDetailsService;
 
 @Configuration
 @EnableWebSecurity
@@ -28,6 +23,12 @@ public class SecurityConfiguration {
 
     @Value("${api-endpoint}")
     String endpoint;
+
+    JpaUserDetailsService jpaUserDetailsService;
+
+    public SecurityConfiguration(JpaUserDetailsService jpaUserDetailsService) {
+        this.jpaUserDetailsService = jpaUserDetailsService;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -40,10 +41,15 @@ public class SecurityConfiguration {
                         .logoutUrl(endpoint + "/logout")
                         .deleteCookies("JSESSIONID"))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, endpoint + "/events").permitAll()
-                        .requestMatchers(HttpMethod.GET, endpoint + "/login").hasAnyRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, endpoint + "/images").permitAll()
+                        .requestMatchers(HttpMethod.GET, endpoint + "/events", endpoint + "/images/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, endpoint + "/events", endpoint + "/images").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, endpoint + "/events/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, endpoint + "/events/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, endpoint + "/users/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, endpoint + "/login").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers(HttpMethod.GET, endpoint + "/events/{id}/subscription").hasAnyRole("USER")
                         .anyRequest().authenticated())
+                .userDetailsService(jpaUserDetailsService)
                 .httpBasic(Customizer.withDefaults())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED));
@@ -67,23 +73,6 @@ public class SecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public InMemoryUserDetailsManager userDetailsService() {
-
-        // The builder will ensure the passwords are encoded before saving in memory
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password("$2a$12$8LegtLQWe717tIPvZeivjuqKnaAs5.bm0Q05.5GrAmcKzXw2NjoUO")
-                .roles("ADMIN")
-                .build();
-
-        Collection<UserDetails> users = new ArrayList<>();
-
-        users.add(admin);
-
-        return new InMemoryUserDetailsManager(users);
     }
 
 }
